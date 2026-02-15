@@ -7,6 +7,7 @@ import torch.nn as nn
 import sounddevice as sd
 import speech_recognition as sr
 import json
+import pandas as pd
 
 from transformers import Wav2Vec2Processor
 from transformers.models.wav2vec2.modeling_wav2vec2 import (
@@ -28,7 +29,19 @@ DURATION_SEC = 5
 # Pick device (Apple Silicon MPS if available)
 device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
-
+# Load the reference table
+def load_threat_reference(filepath="Threat_Level.xlsx"):
+    try:
+        # Assuming columns are: 'NatureofReport', 'countofReports', 'threat_level'
+        df = pd.read_excel(filepath)
+        
+        # Convert to a list of dicts for easy JSON serialization
+        # Example output: [{'NatureofReport': 'Fire', 'threat_level': 'High', ...}, ...]
+        return df.to_dict(orient="records")
+    except Exception as e:
+        print(f"Warning: Could not load threat reference file: {e}")
+        return []
+    
 # -----------------------------
 # Emotion model (same as yours)
 # -----------------------------
@@ -242,7 +255,7 @@ ACOUSTIC SIGNALS (engineered features):
     )
     return resp.output_text
 '''
-def call_archia_dispatch_agent(agent_name: str, transcript: str, dims: dict, scores: dict) -> str:
+def call_archia_dispatch_agent(agent_name: str, transcript: str, dims: dict, scores: dict, threat_data: list) -> str:
     """
     Calls an Archia Agent (OpenAI-compatible Responses API).
     Requires: ARCHIA_TOKEN env var.
@@ -258,7 +271,11 @@ def call_archia_dispatch_agent(agent_name: str, transcript: str, dims: dict, sco
     payload = {
         "transcript": transcript if transcript else "",
         "emotion_dims": dims,
-        "acoustic_scores": scores
+        "acoustic_scores": scores,
+        "reference_manual": {
+            "threat_definitions": threat_data,
+            "instruction": "Use 'threat_definitions' to lookup the likely Threat Level based on the situation described in the transcript."
+        }
     }
 
     resp = client.responses.create(
@@ -289,6 +306,8 @@ def main():
     print(f"  yell_score: {scores['yell_score']:.3f} | whisper_score: {scores['whisper_score']:.3f}")
     print(f"  dispatch_concern: {scores['dispatch_concern']:.4f}")
 
+
+    threat_data = load_threat_reference("Threat_Level.xlsx")
     # 3) Transcribe the same 5s chunk
     print("\nTranscribing (Google Speech Recognition)...")
     transcript = transcribe_google(audio)
@@ -301,7 +320,8 @@ def main():
         agent_name="Summary Generation",   # <-- use your exact agent name from Archia UI
         transcript=transcript,
         dims=dims,
-        scores=scores
+        scores=scores,
+        threat_data = threat_data
         )
     except Exception as e:
         print(f"\n[OpenAI call error] {e}")
