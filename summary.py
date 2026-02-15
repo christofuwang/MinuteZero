@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import sounddevice as sd
 import speech_recognition as sr
+import json
 
 from transformers import Wav2Vec2Processor
 from transformers.models.wav2vec2.modeling_wav2vec2 import (
@@ -191,6 +192,7 @@ def transcribe_google(audio_f32: np.ndarray, sample_rate=SAMPLE_RATE) -> str:
 # -----------------------------
 # Chatbot call (OpenAI Responses API)
 # -----------------------------
+'''
 def call_dispatch_chatbot(transcript: str, dims: dict, scores: dict) -> str:
     """
     Calls an LLM with dispatcher-oriented instructions and returns a structured recommendation.
@@ -239,7 +241,33 @@ ACOUSTIC SIGNALS (engineered features):
         input=input_text,
     )
     return resp.output_text
+'''
+def call_archia_dispatch_agent(agent_name: str, transcript: str, dims: dict, scores: dict) -> str:
+    """
+    Calls an Archia Agent (OpenAI-compatible Responses API).
+    Requires: ARCHIA_TOKEN env var.
+    """
+    token = os.environ["ARCHIA_TOKEN"]
 
+    client = OpenAI(
+        base_url="https://registry.archia.app/v1",          # Archia base URL :contentReference[oaicite:3]{index=3}
+        api_key="not-used",                                 # per Archia guide :contentReference[oaicite:4]{index=4}
+        default_headers={"Authorization": f"Bearer {token}"} # Bearer token :contentReference[oaicite:5]{index=5}
+    )
+
+    payload = {
+        "transcript": transcript if transcript else "",
+        "emotion_dims": dims,
+        "acoustic_scores": scores
+    }
+
+    resp = client.responses.create(
+        model=f"agent:{agent_name}",                         # invoke agent :contentReference[oaicite:6]{index=6}
+        input=json.dumps(payload)
+    )
+
+    # Same access pattern shown in guide :contentReference[oaicite:7]{index=7}
+    return resp.output[0].content[0].text
 
 # -----------------------------
 # Main
@@ -269,10 +297,15 @@ def main():
     # 4) Call chatbot for dispatcher recommendation
     print("\nCalling dispatcher assistant (OpenAI)...")
     try:
-        recommendation = call_dispatch_chatbot(transcript, dims, scores)
+        recommendation = call_archia_dispatch_agent(
+        agent_name="Summary Generation",   # <-- use your exact agent name from Archia UI
+        transcript=transcript,
+        dims=dims,
+        scores=scores
+        )
     except Exception as e:
         print(f"\n[OpenAI call error] {e}")
-        print("Make sure you set OPENAI_API_KEY in your environment.")
+        print("Make sure you set ARCHIA_TOKEN in your environment.")
         return
 
     print("\n================ DISPATCH RECOMMENDATION ================")
