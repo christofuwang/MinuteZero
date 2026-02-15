@@ -25,3 +25,8 @@ dependencies:
       - huggingface-hub
       - safetensors
       - tokenizers
+      - fastapi
+      - uvicorn[standard]
+      - python-dotenv
+      - httpx
+      - python-multipart
