@@ -20,8 +20,12 @@ dependencies:
   - torchaudio
 
   - pip:
-      - transformers==5.1.0
+      - transformers
       - sounddevice
       - huggingface-hub
       - safetensors
       - tokenizers
+      - SpeechRecognition
+      - pyaudio
+      - openai
+      - pandas openpyxl
