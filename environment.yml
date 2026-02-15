@@ -1,0 +1,27 @@
+name: distress_audio
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.10
+  - numpy<2
+  - scipy
+  - pip
+
+  # Audio I/O (brings in portaudio cleanly on mac)
+  - portaudio
+  - pysoundfile
+
+  # PyTorch (CPU build is fine on Mac unless you specifically need MPS tuning)
+  - pytorch>=2.4
+  - torchvision
+  - torchaudio
+
+  - pip:
+      - transformers==5.1.0
+      - sounddevice
+      - huggingface-hub
+      - safetensors
+      - tokenizers
