@@ -274,7 +274,11 @@ def call_archia_dispatch_agent(agent_name: str, transcript: str, dims: dict, sco
         "acoustic_scores": scores,
         "reference_manual": {
             "threat_definitions": threat_data,
-            "instruction": "Use 'threat_definitions' to lookup the likely Threat Level based on the situation described in the transcript."
+            "instruction": (
+                "Step 1. Scan threat_definitions' for the 'NatureOfReport' that best matches the transcript. "
+                "Step 2. Use the associated 'threat_level' to determine the priority. "
+                "Step 3. If the transcript describes a situation rated 'High' or 'Critical' in the definitions, the priority Must be HIGH or IMMEDIATE. "
+            )
         }
     }
 
