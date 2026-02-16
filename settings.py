@@ -19,11 +19,11 @@ class Settings:
     app_port: int = int(os.getenv("APP_PORT", "8000"))
     cors_origins: tuple[str, ...] = _parse_cors_origins(os.getenv("CORS_ORIGINS"))
 
-    archia_api_key: str | None = os.getenv("ARCHIA_API_KEY")
-    archia_base_url: str | None = os.getenv("ARCHIA_BASE_URL")
-    archia_transcription_url: str | None = os.getenv("ARCHIA_TRANSCRIPTION_URL")
-    archia_transcription_path: str = os.getenv("ARCHIA_TRANSCRIPTION_PATH", "/v1/transcriptions")
+    archia_token: str | None = os.getenv("ARCHIA_TOKEN")
+    archia_api_key: str | None = os.getenv("ARCHIA_API_KEY")  # optional fallback
+    archia_sdk_base_url: str = os.getenv("ARCHIA_SDK_BASE_URL", "https://registry.archia.app/v1")
     archia_transcription_model: str = os.getenv("ARCHIA_TRANSCRIPTION_MODEL", "whisper-1")
+
 
 
 settings = Settings()

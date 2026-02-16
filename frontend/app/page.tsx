@@ -2,8 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-type ApiResult = Record<string, unknown>;
-
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 function floatTo16BitPCM(view: DataView, offset: number, input: Float32Array): void {
@@ -80,22 +78,88 @@ async function convertBlobToWav(blob: Blob): Promise<Blob> {
   }
 }
 
-async function postAudio(endpoint: string, audioBlob: Blob, filename: string): Promise<ApiResult> {
+async function postAudioAnalyze(audioBlob: Blob, filename: string) {
   const formData = new FormData();
   formData.append("audio", audioBlob, filename);
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const response = await fetch(`${API_BASE_URL}/api/analyze`, {
     method: "POST",
     body: formData,
   });
 
-  const payload = (await response.json()) as ApiResult;
+  const payload = await response.json().catch(async () => {
+    const text = await response.text();
+    throw new Error(text || `Request failed with status ${response.status}`);
+  });
+
   if (!response.ok) {
-    const detail = typeof payload.detail === "string" ? payload.detail : JSON.stringify(payload);
+    const detail =
+      typeof payload?.detail === "string" ? payload.detail : JSON.stringify(payload ?? {});
     throw new Error(detail);
   }
 
-  return payload;
+  return payload as {
+    transcript?: string;
+    emotion_dims?: Record<string, number>;
+    acoustic_scores?: Record<string, number>;
+    recommendation?: string;
+  };
+}
+
+function formatMetrics(
+  emotionDims?: Record<string, number>,
+  acousticScores?: Record<string, number>
+): string {
+  const lines: string[] = [];
+
+  // Emotion
+  lines.push("Emotion Dimensions (approx 0..1):");
+  if (emotionDims && Object.keys(emotionDims).length > 0) {
+    const order = ["arousal", "dominance", "valence"];
+    for (const key of order) {
+      const v = emotionDims[key];
+      if (typeof v === "number") lines.push(`  ${key}: ${v.toFixed(4)}`);
+    }
+    // include any extras
+    for (const [k, v] of Object.entries(emotionDims)) {
+      if (order.includes(k)) continue;
+      if (typeof v === "number") lines.push(`  ${k}: ${v.toFixed(4)}`);
+    }
+  } else {
+    lines.push("  (no emotion dims returned)");
+  }
+
+  lines.push("");
+  lines.push("Acoustic signals:");
+  if (acousticScores && Object.keys(acousticScores).length > 0) {
+    const rms = acousticScores.rms;
+    const zcr = acousticScores.zcr;
+    const yell = acousticScores.yell_score;
+    const whisper = acousticScores.whisper_score;
+    const concern = acousticScores.dispatch_concern;
+
+    if (typeof rms === "number" && typeof zcr === "number") {
+      lines.push(`  rms: ${rms.toFixed(5)} | zcr: ${zcr.toFixed(3)}`);
+    }
+    if (typeof yell === "number" && typeof whisper === "number") {
+      lines.push(`  yell_score: ${yell.toFixed(3)} | whisper_score: ${whisper.toFixed(3)}`);
+    }
+    if (typeof concern === "number") {
+      lines.push(`  dispatch_concern: ${concern.toFixed(4)}`);
+    }
+
+    // include any extras
+    const known = new Set(["rms", "zcr", "yell_score", "whisper_score", "dispatch_concern"]);
+    for (const [k, v] of Object.entries(acousticScores)) {
+      if (known.has(k)) continue;
+      if (typeof v === "number") lines.push(`  ${k}: ${v}`);
+      else lines.push(`  ${k}: ${String(v)}`);
+    }
+  } else {
+    lines.push("  (no acoustic scores returned)");
+  }
+
+  return lines.join("\n");
 }
 
 export default function Home() {
@@ -105,10 +169,14 @@ export default function Home() {
 
   const [isRecording, setIsRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [transcriptionResult, setTranscriptionResult] = useState<ApiResult | null>(null);
-  const [audioProcessResult, setAudioProcessResult] = useState<ApiResult | null>(null);
+
+  // ✅ Text-only outputs for the 3 boxes
+  const [transcriptText, setTranscriptText] = useState<string>("");
+  const [metricsText, setMetricsText] = useState<string>("");
+  const [summaryText, setSummaryText] = useState<string>("");
 
   const audioUrl = useMemo(() => {
     if (!audioBlob) return null;
@@ -122,23 +190,23 @@ export default function Home() {
 
   useEffect(() => {
     return () => {
-      if (audioUrl) {
-        URL.revokeObjectURL(audioUrl);
-      }
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
     };
   }, [audioUrl]);
 
   useEffect(() => {
-    return () => {
-      cleanupStream();
-    };
+    return () => cleanupStream();
   }, []);
 
   const startRecording = async () => {
     setError(null);
     setAudioBlob(null);
-    setTranscriptionResult(null);
-    setAudioProcessResult(null);
+
+    // Clear boxes
+    setTranscriptText("");
+    setMetricsText("");
+    setSummaryText("");
+
     chunksRef.current = [];
 
     try {
@@ -149,9 +217,7 @@ export default function Home() {
       recorderRef.current = recorder;
 
       recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          chunksRef.current.push(event.data);
-        }
+        if (event.data.size > 0) chunksRef.current.push(event.data);
       };
 
       recorder.onstop = () => {
@@ -183,10 +249,7 @@ export default function Home() {
   };
 
   const prepareUploadBlob = async (): Promise<Blob> => {
-    if (!audioBlob) {
-      throw new Error("No recording available");
-    }
-
+    if (!audioBlob) throw new Error("No recording available");
     try {
       return await convertBlobToWav(audioBlob);
     } catch {
@@ -194,58 +257,20 @@ export default function Home() {
     }
   };
 
-  const runTranscription = async () => {
+  const runAnalyze = async () => {
     setError(null);
     setIsSubmitting(true);
     try {
       const uploadBlob = await prepareUploadBlob();
-      const result = await postAudio("/api/transcription", uploadBlob, "recording.wav");
-      setTranscriptionResult(result);
+      const result = await postAudioAnalyze(uploadBlob, "recording.wav");
+
+      // ✅ Route each piece to its correct box
+      setTranscriptText(result.transcript ? result.transcript : "");
+      setMetricsText(formatMetrics(result.emotion_dims, result.acoustic_scores));
+      setSummaryText(result.recommendation ? result.recommendation : "");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Transcription request failed";
+      const message = err instanceof Error ? err.message : "Analyze request failed";
       setError(message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const runAudioProcess = async () => {
-    setError(null);
-    setIsSubmitting(true);
-    try {
-      const uploadBlob = await prepareUploadBlob();
-      const result = await postAudio("/api/audio-process", uploadBlob, "recording.wav");
-      setAudioProcessResult(result);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Audio processing request failed";
-      setError(message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const runBoth = async () => {
-    setError(null);
-    setIsSubmitting(true);
-    try {
-      const uploadBlob = await prepareUploadBlob();
-      const [transcription, audioProcess] = await Promise.allSettled([
-        postAudio("/api/transcription", uploadBlob, "recording.wav"),
-        postAudio("/api/audio-process", uploadBlob, "recording.wav"),
-      ]);
-
-      if (transcription.status === "fulfilled") {
-        setTranscriptionResult(transcription.value);
-      } else {
-        setError(`Transcription failed: ${transcription.reason instanceof Error ? transcription.reason.message : "Unknown error"}`);
-      }
-
-      if (audioProcess.status === "fulfilled") {
-        setAudioProcessResult(audioProcess.value);
-      } else {
-        const processError = `Audio process failed: ${audioProcess.reason instanceof Error ? audioProcess.reason.message : "Unknown error"}`;
-        setError((current) => (current ? `${current} | ${processError}` : processError));
-      }
     } finally {
       setIsSubmitting(false);
     }
@@ -269,29 +294,11 @@ export default function Home() {
 
             <button
               type="button"
-              onClick={runBoth}
+              onClick={runAnalyze}
               disabled={!audioBlob || isSubmitting || isRecording}
               className="rounded-full border border-black px-5 py-2 transition hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
             >
-              Send to Both APIs
-            </button>
-
-            <button
-              type="button"
-              onClick={runTranscription}
-              disabled={!audioBlob || isSubmitting || isRecording}
-              className="rounded-full border border-zinc-400 px-5 py-2 transition hover:border-black disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Transcription Only
-            </button>
-
-            <button
-              type="button"
-              onClick={runAudioProcess}
-              disabled={!audioBlob || isSubmitting || isRecording}
-              className="rounded-full border border-zinc-400 px-5 py-2 transition hover:border-black disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Audio Process Only
+              Analyze (Transcript + Metrics + Summary)
             </button>
           </div>
 
@@ -316,19 +323,26 @@ export default function Home() {
 
         <div className="grid gap-4 md:grid-cols-2">
           <section className="rounded-2xl border border-zinc-300 bg-white p-4 shadow-sm">
-            <h2 className="mb-2 text-lg font-semibold">Transcription Result</h2>
-            <pre className="max-h-80 overflow-auto rounded-md bg-zinc-900 p-3 text-xs text-zinc-100">
-              {transcriptionResult ? JSON.stringify(transcriptionResult, null, 2) : "No transcription result yet."}
-            </pre>
+            <h2 className="mb-2 text-lg font-semibold">Transcription</h2>
+            <div className="max-h-80 overflow-auto rounded-md bg-zinc-900 p-3 text-sm text-zinc-100 whitespace-pre-wrap">
+              {transcriptText ? transcriptText : "No transcript yet."}
+            </div>
           </section>
 
           <section className="rounded-2xl border border-zinc-300 bg-white p-4 shadow-sm">
-            <h2 className="mb-2 text-lg font-semibold">Audio Process Result</h2>
-            <pre className="max-h-80 overflow-auto rounded-md bg-zinc-900 p-3 text-xs text-zinc-100">
-              {audioProcessResult ? JSON.stringify(audioProcessResult, null, 2) : "No audio process result yet."}
-            </pre>
+            <h2 className="mb-2 text-lg font-semibold">Audio Process (Emotion + Acoustic)</h2>
+            <div className="max-h-80 overflow-auto rounded-md bg-zinc-900 p-3 text-sm text-zinc-100 whitespace-pre-wrap">
+              {metricsText ? metricsText : "No audio result yet."}
+            </div>
           </section>
         </div>
+
+        <section className="rounded-2xl border border-zinc-300 bg-white p-4 shadow-sm">
+          <h2 className="mb-2 text-lg font-semibold">Dispatch Summary (Agent Output)</h2>
+          <div className="max-h-96 overflow-auto rounded-md bg-zinc-900 p-3 text-sm text-zinc-100 whitespace-pre-wrap">
+            {summaryText ? summaryText : "No summary yet."}
+          </div>
+        </section>
 
         <p className="text-xs text-zinc-500">
           Backend URL: <code>{API_BASE_URL}</code>
@@ -337,3 +351,4 @@ export default function Home() {
     </main>
   );
 }
+
