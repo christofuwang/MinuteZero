@@ -210,7 +210,8 @@ export default function Home() {
     chunksRef.current = [];
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      //const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }});
       streamRef.current = stream;
 
       const recorder = new MediaRecorder(stream);
@@ -277,16 +278,59 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-amber-50 px-6 py-10 text-zinc-900">
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
-        <h1 className="text-3xl font-semibold">MinuteZero Audio Console</h1>
+    <main className="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#2b2d42] to-[#937d92] px-6 py-10 text-white">
+      {/* Ambient glow blobs */}
+      <div className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute -left-24 -top-24 h-[420px] w-[420px] rounded-full bg-white/10 blur-3xl" />
+        <div className="absolute -right-24 top-1/3 h-[520px] w-[520px] rounded-full bg-[#937d92]/25 blur-3xl" />
+        <div className="absolute left-1/3 -bottom-28 h-[520px] w-[520px] rounded-full bg-[#2b2d42]/35 blur-3xl" />
+      </div>
 
-        <div className="rounded-2xl border border-zinc-300 bg-white p-5 shadow-sm">
+      {/* Big faint background logo */}
+      <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center">
+        <img
+          src="/LogoFull_Final.png"
+          alt=""
+          className="w-[160vw] max-w-none opacity-[0.12] blur-xl"
+        />
+      </div>
+
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+        {/* Header with logo + pulse ring when recording */}
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            {/* pulse ring */}
+            {isRecording ? (
+              <span className="absolute inset-0 -z-10 rounded-full bg-white/20 blur-md animate-pulse" />
+            ) : null}
+
+            <div className="grid h-12 w-12 place-items-center rounded-full bg-white/10 backdrop-blur border border-white/20 shadow-lg">
+              <img src="/LogoFull_Final.png" alt="MinuteZero" className="h-auto w-9" />
+            </div>
+          </div>
+
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight">MinuteZero</h1>
+            <p className="text-sm text-white/70">
+              Audio Console • Transcript • Metrics • Dispatch Summary
+            </p>
+          </div>
+        </div>
+
+        {/* Recorder card (glass) */}
+        <div className="relative rounded-2xl border border-white/20 bg-white/10 p-5 shadow-xl backdrop-blur-xl">
+          {/* watermark logo in card */}
+          <img
+            src="/LogoFull_Final.png"
+            alt=""
+            className="pointer-events-none absolute bottom-4 right-4 w-24 opacity-[0.08]"
+          />
+
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={handleRecordClick}
-              className="rounded-full bg-black px-6 py-3 text-white transition hover:opacity-85 disabled:opacity-50"
+              className="rounded-full bg-white/15 px-6 py-3 text-white backdrop-blur border border-white/20 shadow-lg hover:bg-white/20 transition disabled:opacity-50"
               disabled={isSubmitting}
             >
               {isRecording ? "Stop Recording" : "Start Recording"}
@@ -296,13 +340,13 @@ export default function Home() {
               type="button"
               onClick={runAnalyze}
               disabled={!audioBlob || isSubmitting || isRecording}
-              className="rounded-full border border-black px-5 py-2 transition hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-full bg-black/30 px-5 py-2 text-white border border-white/20 shadow hover:bg-black/40 transition disabled:cursor-not-allowed disabled:opacity-40"
             >
               Analyze (Transcript + Metrics + Summary)
             </button>
           </div>
 
-          <p className="mt-4 text-sm text-zinc-600">
+          <p className="mt-4 text-sm text-white/70">
             {isRecording
               ? "Recording in progress..."
               : isSubmitting
@@ -318,34 +362,35 @@ export default function Home() {
             </div>
           ) : null}
 
-          {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
+          {error ? <p className="mt-3 text-sm text-red-200">{error}</p> : null}
         </div>
 
+        {/* Panels */}
         <div className="grid gap-4 md:grid-cols-2">
-          <section className="rounded-2xl border border-zinc-300 bg-white p-4 shadow-sm">
+          <section className="rounded-2xl border border-white/20 bg-white/10 p-4 shadow-xl backdrop-blur-xl">
             <h2 className="mb-2 text-lg font-semibold">Transcription</h2>
-            <div className="max-h-80 overflow-auto rounded-md bg-zinc-900 p-3 text-sm text-zinc-100 whitespace-pre-wrap">
+            <div className="max-h-80 overflow-auto rounded-md bg-black/30 p-3 text-sm text-white/90 whitespace-pre-wrap border border-white/10 font-mono leading-relaxed">
               {transcriptText ? transcriptText : "No transcript yet."}
             </div>
           </section>
 
-          <section className="rounded-2xl border border-zinc-300 bg-white p-4 shadow-sm">
+          <section className="rounded-2xl border border-white/20 bg-white/10 p-4 shadow-xl backdrop-blur-xl">
             <h2 className="mb-2 text-lg font-semibold">Audio Process (Emotion + Acoustic)</h2>
-            <div className="max-h-80 overflow-auto rounded-md bg-zinc-900 p-3 text-sm text-zinc-100 whitespace-pre-wrap">
+            <div className="max-h-80 overflow-auto rounded-md bg-black/30 p-3 text-sm text-white/90 whitespace-pre-wrap border border-white/10 font-mono leading-relaxed">
               {metricsText ? metricsText : "No audio result yet."}
             </div>
           </section>
         </div>
 
-        <section className="rounded-2xl border border-zinc-300 bg-white p-4 shadow-sm">
+        <section className="rounded-2xl border border-white/20 bg-white/10 p-4 shadow-xl backdrop-blur-xl">
           <h2 className="mb-2 text-lg font-semibold">Dispatch Summary (Agent Output)</h2>
-          <div className="max-h-96 overflow-auto rounded-md bg-zinc-900 p-3 text-sm text-zinc-100 whitespace-pre-wrap">
+          <div className="max-h-96 overflow-auto rounded-md bg-black/30 p-3 text-sm text-white/90 whitespace-pre-wrap border border-white/10 font-mono leading-relaxed">
             {summaryText ? summaryText : "No summary yet."}
           </div>
         </section>
 
-        <p className="text-xs text-zinc-500">
-          Backend URL: <code>{API_BASE_URL}</code>
+        <p className="text-xs text-white/70">
+          Backend URL: <code className="rounded bg-black/25 px-1 py-0.5">{API_BASE_URL}</code>
         </p>
       </div>
     </main>
