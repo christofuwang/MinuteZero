@@ -19,21 +19,19 @@ dependencies:
   - torchvision
   - torchaudio
 
-  - pip:
+- pip:
       - transformers
       - sounddevice
       - huggingface-hub
       - safetensors
       - tokenizers
-<<<<<<< HEAD
       - SpeechRecognition
       - pyaudio
       - openai
-      - pandas openpyxl
-=======
+      - pandas
+      - openpyxl
       - fastapi
       - uvicorn[standard]
       - python-dotenv
       - httpx
       - python-multipart
->>>>>>> 642b11b304d2fe72e1cc81322a3a436cb35fcace
