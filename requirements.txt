@@ -1,0 +1,28 @@
+# PyTorch CPU-only (much smaller for cloud deploy)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchaudio
+
+# ML / Audio
+transformers
+huggingface-hub
+safetensors
+tokenizers
+soundfile
+numpy<2
+scipy
+SpeechRecognition
+
+# API server
+fastapi
+uvicorn[standard]
+python-dotenv
+httpx
+python-multipart
+
+# Archia / OpenAI SDK
+openai
+
+# Threat-level spreadsheet
+pandas
+openpyxl

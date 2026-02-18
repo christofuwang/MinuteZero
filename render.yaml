@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: minutezero-api
+    runtime: docker
+    plan: starter plus   # 1 GB RAM — bump to "standard" (2 GB) if model loading OOMs
+    envVars:
+      - key: ARCHIA_TOKEN
+        sync: false           # Render will prompt you to fill this in the dashboard
+      - key: ARCHIA_AGENT_NAME
+        value: "Summary Generation"
+      - key: CORS_ORIGINS
+        sync: false           # set to your frontend URL, e.g. https://your-app.vercel.app
