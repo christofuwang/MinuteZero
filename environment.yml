@@ -20,18 +20,18 @@ dependencies:
   - torchaudio
 
   - pip:
-      - transformers
-      - sounddevice
-      - huggingface-hub
-      - safetensors
-      - tokenizers
-      - SpeechRecognition
-      - pyaudio
-      - openai
-      - pandas
-      - openpyxl
-      - fastapi
-      - uvicorn[standard]
-      - python-dotenv
-      - httpx
-      - python-multipart
+    - transformers
+    - sounddevice
+    - huggingface-hub
+    - safetensors
+    - tokenizers
+    - SpeechRecognition
+    - pyaudio
+    - openai
+    - pandas
+    - openpyxl
+    - fastapi
+    - uvicorn[standard]
+    - python-dotenv
+    - httpx
+    - python-multipart
