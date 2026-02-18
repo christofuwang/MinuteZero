@@ -2,7 +2,7 @@ services:
   - type: web
     name: minutezero-api
     runtime: docker
-    plan: starter plus   # 1 GB RAM — bump to "standard" (2 GB) if model loading OOMs
+    plan: starter_plus   # 1 GB RAM — bump to "standard" (2 GB) if model loading OOMs
     envVars:
       - key: ARCHIA_TOKEN
         sync: false           # Render will prompt you to fill this in the dashboard
