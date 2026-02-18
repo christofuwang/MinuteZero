@@ -388,10 +388,6 @@ export default function Home() {
             {summaryText ? summaryText : "No summary yet."}
           </div>
         </section>
-
-        <p className="text-xs text-white/70">
-          Backend URL: <code className="rounded bg-black/25 px-1 py-0.5">{API_BASE_URL}</code>
-        </p>
       </div>
     </main>
   );
